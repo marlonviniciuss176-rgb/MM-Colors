@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin MM Colors</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial; }
+    body { background: #f5f5f5; padding: 20px; }
+    .card { background: white; max-width: 800px; margin: 20px auto; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 5px; border: 1px solid #ddd; }
+    button { background: #FF6B35; color: white; border: none; cursor: pointer; font-size: 16px; }
+    button:hover { background: #e55a2b; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+    .btn-excluir { background: #dc3545; width: auto; padding: 5px 10px; font-size: 14px; }
+    .erro { background: #ffe6e6; color: #cc0000; padding: 10px; margin: 10px 0; border-radius: 5px; display: none; }
+    .btn-loja { background: #28a745; margin-bottom: 10px; }
+    .btn-sair { background: #666; }
+    #painel { display: none; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- TELA DE LOGIN ADMIN -->
+<div class="card" id="login">
+  <h2>Painel Administrativo - MM Colors</h2>
+  <div id="erro-login" class="erro"></div>
+  <input type="text" id="email" placeholder="E-mail" value="admin@mmcolors.com">
+  <input type="password" id="senha" placeholder="Senha" value="123456">
+  <button onclick="fazerLogin()">Entrar</button>
+</div>
+
+<!-- PAINEL DE CONTROLE -->
+<div class="card" id="painel">
+  <h2>Cadastrar Produto</h2>
+  <input type="text" id="nome-produto" placeholder="Nome do produto">
+  <input type="number" id="preco-produto" placeholder="Preço" step="0.01">
+  <input type="text" id="img-produto" placeholder="URL da imagem">
+  <input type="number" id="estoque-produto" placeholder="Estoque">
+  <button onclick="salvarProduto()">Salvar Produto</button>
+
+  <h2 style="margin-top: 30px;">Produtos Cadastrados</h2>
+  <div id="loading" style="display: none;">Carregando...</div>
+  <table id="tabela-produtos">
+    <thead><tr><th>Nome</th><th>Preço</th><th>Estoque</th><th>Ação</th></tr></thead>
+    <tbody id="lista-produtos"><tr><td colspan="4">Nenhum produto</td></tr>
+    </tbody>
+  </table>
+
+  <!-- Botões adicionais -->
+  <button class="btn-loja" onclick="window.open('index.html', '_blank')">🛍️ Ver Loja Pública</button>
+  <button class="btn-sair" onclick="sair()">Sair</button>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://caetutilvrjrlrussirx.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_MaQtCqK3IfISG1P7oYm9KA_jnWODH7n';
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  async function fazerLogin() {
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+    const erroDiv = document.getElementById('erro-login');
+    if (!email || !senha) {
+      erroDiv.innerText = 'Preencha e-mail e senha.';
+      erroDiv.style.display = 'block';
+      return;
+    }
+    try {
+      const { data, error } = await supabaseClient
+        .from('admins')
+        .select('*')
+        .eq('email', email)
+        .eq('senha', senha)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        erroDiv.style.display = 'none';
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('painel').style.display = 'block';
+        carregarProdutos();
+      } else {
+        erroDiv.innerText = 'E-mail ou senha incorretos. Use admin@mmcolors.com / 123456';
+        erroDiv.style.display = 'block';
+      }
+    } catch (err) {
+      erroDiv.innerText = 'Erro ao conectar: ' + err.message;
+      erroDiv.style.display = 'block';
+    }
+  }
+
+  async function carregarProdutos() {
+    const tbody = document.getElementById('lista-produtos');
+    tbody.innerHTML = '<tr><td colspan="4">Carregando...</td></tr>';
+    const { data, error } = await supabaseClient.from('produtos').select('*').order('id', { ascending: false });
+    if (error) {
+      tbody.innerHTML = `<tr><td colspan="4">Erro: ${error.message}</td></tr>`;
+      return;
+    }
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4">Nenhum produto cadastrado</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(produto => `
+      <tr>
+        <td>${produto.nome}</td>
+        <td>R$ ${parseFloat(produto.preco).toFixed(2)}</td>
+        <td>${produto.estoque}</td>
+        <td><button class="btn-excluir" onclick="excluirProduto(${produto.id})">Excluir</button></td>
+      </tr>
+    `).join('');
+  }
+
+  async function salvarProduto() {
+    const nome = document.getElementById('nome-produto').value;
+    const preco = document.getElementById('preco-produto').value;
+    const img = document.getElementById('img-produto').value;
+    const estoque = document.getElementById('estoque-produto').value;
+    if (!nome || !preco || !img || !estoque) {
+      alert('Preencha todos os campos.');
+      return;
+    }
+    const { error } = await supabaseClient.from('produtos').insert([{ nome, preco, img, estoque }]);
+    if (error) {
+      alert('Erro ao salvar: ' + error.message);
+    } else {
+      alert('Produto salvo!');
+      document.getElementById('nome-produto').value = '';
+      document.getElementById('preco-produto').value = '';
+      document.getElementById('img-produto').value = '';
+      document.getElementById('estoque-produto').value = '';
+      carregarProdutos();
+    }
+  }
+
+  async function excluirProduto(id) {
+    if (confirm('Excluir produto?')) {
+      const { error } = await supabaseClient.from('produtos').delete().eq('id', id);
+      if (error) alert('Erro: ' + error.message);
+      else carregarProdutos();
+    }
+  }
+
+  function sair() {
+    document.getElementById('painel').style.display = 'none';
+    document.getElementById('login').style.display = 'block';
+    document.getElementById('email').value = 'admin@mmcolors.com';
+    document.getElementById('senha').value = '123456';
+  }
+</script>
+</body>
+</html>

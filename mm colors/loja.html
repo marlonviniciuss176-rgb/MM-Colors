@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MM Colors - Tintas e Materiais</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: #f5f5f5; color: #333; }
+    header { background: #FF6B35; color: white; padding: 20px; text-align: center; position: relative; }
+    header h1 { font-size: 2rem; }
+    .user-info { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 20px; font-size: 0.9rem; }
+    .user-info a { color: white; text-decoration: none; margin-left: 10px; }
+    .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; }
+    .produtos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; }
+    .card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .card img { width: 100%; height: 200px; object-fit: cover; }
+    .card-body { padding: 20px; }
+    .card-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 10px; }
+    .card-price { font-size: 1.5rem; color: #FF6B35; font-weight: bold; }
+    .card-stock { font-size: 0.85rem; color: #666; margin: 10px 0; }
+    .btn-comprar { background: #FF6B35; color: white; border: none; padding: 10px; width: 100%; border-radius: 25px; cursor: pointer; }
+    .btn-comprar:hover { background: #e55a2b; }
+    .footer { text-align: center; padding: 30px; background: #1a1a1a; color: #ccc; margin-top: 50px; }
+    .loading { text-align: center; padding: 50px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+  <h1>🎨 MM Colors</h1>
+  <p>Tintas, pincéis e materiais de qualidade para sua obra</p>
+  <div class="user-info" id="user-info">
+    <!-- será preenchido via JS -->
+  </div>
+</header>
+
+<div class="container">
+  <div id="loading" class="loading">🔄 Carregando produtos...</div>
+  <div id="produtos-grid" class="produtos-grid"></div>
+</div>
+
+<div class="footer">
+  <p>© 2025 MM Colors</p>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://caetutilvrjrlrussirx.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_MaQtCqK3IfISG1P7oYm9KA_jnWODH7n';
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const WHATSAPP_NUMBER = '5511999999999'; // substitua
+
+  // Verificar se cliente está logado
+  let cliente = null;
+  try {
+    cliente = JSON.parse(localStorage.getItem('cliente'));
+  } catch(e) {}
+
+  const userInfoDiv = document.getElementById('user-info');
+  if (cliente) {
+    userInfoDiv.innerHTML = `Olá, ${cliente.nome} | <a href="minha-conta.html">Minha Conta</a> | <a href="#" onclick="logout()">Sair</a>`;
+  } else {
+    userInfoDiv.innerHTML = `<a href="login-cliente.html" style="color:white;">Entrar</a> | <a href="cadastro.html" style="color:white;">Cadastrar</a>`;
+  }
+
+  function logout() {
+    localStorage.removeItem('cliente');
+    window.location.reload();
+  }
+
+  async function carregarProdutos() {
+    const loadingDiv = document.getElementById('loading');
+    const grid = document.getElementById('produtos-grid');
+    try {
+      const { data, error } = await supabaseClient.from('produtos').select('*').order('id', { ascending: false });
+      if (error) throw error;
+      loadingDiv.style.display = 'none';
+      if (!data || data.length === 0) {
+        grid.innerHTML = '<div class="sem-produtos">Nenhum produto disponível.</div>';
+        return;
+      }
+      grid.innerHTML = data.map(produto => `
+        <div class="card">
+          <img src="${produto.img || 'https://via.placeholder.com/300x200?text=Sem+Imagem'}" onerror="this.src='https://via.placeholder.com/300x200?text=Imagem+Indisponível'">
+          <div class="card-body">
+            <div class="card-title">${produto.nome}</div>
+            <div class="card-price">R$ ${parseFloat(produto.preco).toFixed(2)}</div>
+            <div class="card-stock">📦 Estoque: ${produto.estoque} un.</div>
+            <button class="btn-comprar" onclick="comprarProduto('${produto.nome}', ${produto.preco})">🛒 Comprar agora</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      loadingDiv.innerHTML = 'Erro ao carregar produtos.';
+    }
+  }
+
+  function comprarProduto(nome, preco) {
+    if (!cliente) {
+      if (confirm('Você precisa estar logado para comprar. Deseja fazer login?')) {
+        window.location.href = 'login-cliente.html';
+      }
+      return;
+    }
+    const mensagem = `Olá! Meu nome é ${cliente.nome}. Gostaria de comprar o produto: *${nome}* no valor de R$ ${preco.toFixed(2)}.`;
+    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(mensagem)}`;
+    window.open(url, '_blank');
+  }
+
+  carregarProdutos();
+</script>
+</body>
+</html>

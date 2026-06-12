@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MM Colors - Loja de Tintas</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: #f5f5f5; }
+    header { background: #FF6B35; color: white; padding: 20px; text-align: center; position: relative; }
+    header h1 { font-size: 2rem; }
+    .user-info { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 20px; font-size: 0.9rem; }
+    .user-info a { color: white; text-decoration: none; margin-left: 10px; }
+    .carrinho-icon { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.2); padding: 5px 12px; border-radius: 20px; color: white; text-decoration: none; }
+    .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; }
+    .categorias { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 40px; }
+    .categoria-btn { background: #eee; border: none; padding: 10px 20px; border-radius: 30px; cursor: pointer; font-size: 1rem; }
+    .categoria-btn.active { background: #FF6B35; color: white; }
+    .produtos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; }
+    .card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .card img { width: 100%; height: 200px; object-fit: cover; }
+    .card-body { padding: 20px; }
+    .card-title { font-size: 1.2rem; font-weight: bold; }
+    .card-price { font-size: 1.5rem; color: #FF6B35; font-weight: bold; margin: 10px 0; }
+    .card-stock { font-size: 0.85rem; color: #666; margin-bottom: 15px; }
+    .btn-adicionar { background: #28a745; color: white; border: none; padding: 10px; width: 100%; border-radius: 25px; cursor: pointer; font-size: 1rem; }
+    .btn-adicionar:hover { background: #218838; }
+    .footer { text-align: center; padding: 30px; background: #1a1a1a; color: #ccc; margin-top: 50px; }
+    .loading { text-align: center; padding: 50px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+  <a href="carrinho.html" class="carrinho-icon">🛒 Carrinho (<span id="carrinho-count">0</span>)</a>
+  <h1>🎨 MM Colors</h1>
+  <p>Tintas, massas, gesso, grafiato e ferramentas</p>
+  <div class="user-info" id="user-info"></div>
+</header>
+
+<div class="container">
+  <div class="categorias" id="categorias"></div>
+  <div id="loading" class="loading">🔄 Carregando produtos...</div>
+  <div id="produtos-grid" class="produtos-grid"></div>
+</div>
+
+<div class="footer">
+  <p>© 2025 MM Colors - Todos os direitos reservados</p>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://caetutilvrjrlrussirx.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_MaQtCqK3IfISG1P7oYm9KA_jnWODH7n';
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const categorias = [
+    "tintas", "massas acrílicas", "gesso em pó", "grafiato",
+    "massa pva textura", "massa polimerica", "ferramentas"
+  ];
+
+  let clienteLogado = null;
+  let todosProdutos = [];
+  let categoriaAtiva = "tintas";
+
+  // Verifica sessão
+  try { clienteLogado = JSON.parse(localStorage.getItem('cliente')); } catch(e) {}
+
+  // Atualiza cabeçalho
+  const userDiv = document.getElementById('user-info');
+  if (clienteLogado) {
+    userDiv.innerHTML = `Olá, ${clienteLogado.nome} | <a href="minha-conta.html">Minha Conta</a> | <a href="#" onclick="logout()">Sair</a>`;
+  } else {
+    userDiv.innerHTML = `<a href="login-cliente.html">Entrar</a> | <a href="cadastro.html">Cadastrar</a>`;
+  }
+
+  window.logout = function() {
+    localStorage.removeItem('cliente');
+    window.location.reload();
+  };
+
+  // Atualiza contador do carrinho
+  function atualizarContadorCarrinho() {
+    const carrinho = JSON.parse(localStorage.getItem('carrinho') || '[]');
+    document.getElementById('carrinho-count').innerText = carrinho.length;
+  }
+
+  // Adicionar ao carrinho (exige login)
+  window.adicionarAoCarrinho = function(produto) {
+    if (!clienteLogado) {
+      alert('Você precisa estar logado para comprar. Faça login ou cadastre-se.');
+      window.location.href = 'login-cliente.html';
+      return;
+    }
+    let carrinho = JSON.parse(localStorage.getItem('carrinho') || '[]');
+    const existing = carrinho.find(item => item.id === produto.id);
+    if (existing) {
+      existing.quantidade++;
+    } else {
+      carrinho.push({
+        id: produto.id,
+        nome: produto.nome,
+        preco: produto.preco,
+        quantidade: 1,
+        img: produto.img
+      });
+    }
+    localStorage.setItem('carrinho', JSON.stringify(carrinho));
+    atualizarContadorCarrinho();
+    alert('Produto adicionado ao carrinho!');
+  };
+
+  // Carregar produtos
+  async function carregarProdutos() {
+    const loadingDiv = document.getElementById('loading');
+    const grid = document.getElementById('produtos-grid');
+    loadingDiv.style.display = 'block';
+    const { data, error } = await supabaseClient.from('produtos').select('*').order('id', { ascending: false });
+    if (error) { loadingDiv.innerHTML = 'Erro ao carregar produtos'; return; }
+    todosProdutos = data;
+    loadingDiv.style.display = 'none';
+    renderizarBotoesCategoria();
+    renderizarProdutos();
+  }
+
+  function renderizarBotoesCategoria() {
+    const container = document.getElementById('categorias');
+    container.innerHTML = categorias.map(cat => `
+      <button class="categoria-btn ${categoriaAtiva === cat ? 'active' : ''}" onclick="filtrarPorCategoria('${cat}')">
+        ${cat.charAt(0).toUpperCase() + cat.slice(1)}
+      </button>
+    `).join('');
+  }
+
+  function renderizarProdutos() {
+    const grid = document.getElementById('produtos-grid');
+    const filtrados = todosProdutos.filter(p => p.categoria === categoriaAtiva);
+    if (!filtrados.length) {
+      grid.innerHTML = '<p style="text-align:center;">Nenhum produto nesta categoria.</p>';
+      return;
+    }
+    grid.innerHTML = filtrados.map(p => `
+      <div class="card">
+        <img src="${p.img || 'https://via.placeholder.com/300'}" onerror="this.src='https://via.placeholder.com/300'">
+        <div class="card-body">
+          <div class="card-title">${p.nome}</div>
+          <div class="card-price">R$ ${parseFloat(p.preco).toFixed(2)}</div>
+          <div class="card-stock">📦 Estoque: ${p.estoque} un.</div>
+          <button class="btn-adicionar" onclick="adicionarAoCarrinho({id:${p.id}, nome:'${p.nome.replace(/'/g, "\\'")}', preco:${p.preco}, img:'${p.img}'})">➕ Adicionar ao Carrinho</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.filtrarPorCategoria = function(cat) {
+    categoriaAtiva = cat;
+    renderizarBotoesCategoria();
+    renderizarProdutos();
+  };
+
+  carregarProdutos();
+  atualizarContadorCarrinho();
+</script>
+</body>
+</html>

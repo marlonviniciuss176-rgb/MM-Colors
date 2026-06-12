@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin MM Colors</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { background: #f5f5f5; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .card { background: white; border-radius: 10px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h2 { color: #FF6B35; margin-bottom: 20px; border-left: 4px solid #FF6B35; padding-left: 15px; }
+    input, select, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd; }
+    button { background: #FF6B35; color: white; border: none; cursor: pointer; }
+    button:hover { background: #e55a2b; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; }
+    .btn-editar { background: #28a745; width: auto; padding: 5px 10px; margin: 0 2px; }
+    .btn-excluir { background: #dc3545; width: auto; padding: 5px 10px; margin: 0 2px; }
+    .erro { background: #ffe6e6; color: #cc0000; padding: 10px; margin-bottom: 10px; display: none; }
+    #painel { display: none; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // Nome único para o cliente Supabase (evita conflito)
+    const SUPABASE_URL = 'https://caetutilvrjrlrussirx.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_MaQtCqK3IfISG1P7oYm9KA_jnWODH7n';
+    const supabaseApp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Função de login (definida imediatamente como global)
+    window.adminLogin = async function() {
+      const email = document.getElementById('email').value;
+      const senha = document.getElementById('senha').value;
+      const erro = document.getElementById('erro-login');
+      erro.style.display = 'none';
+      try {
+        const { data } = await supabaseApp.from('admins').select().eq('email', email).eq('senha', senha).maybeSingle();
+        if (data) {
+          document.getElementById('login').style.display = 'none';
+          document.getElementById('painel').style.display = 'block';
+          carregarProdutos();
+          carregarClientes();
+          carregarPedidos();
+        } else {
+          erro.innerText = 'Credenciais inválidas. Use admin@mmcolors.com / 123456';
+          erro.style.display = 'block';
+        }
+      } catch(err) {
+        erro.innerText = 'Erro: ' + err.message;
+        erro.style.display = 'block';
+      }
+    };
+
+    // Produtos
+    async function carregarProdutos() {
+      const { data } = await supabaseApp.from('produtos').select('*').order('id', { ascending: false });
+      const tbody = document.getElementById('lista-produtos');
+      if (!data || data.length === 0) { tbody.innerHTML = '<td><td colspan="5">Nenhum produto</td></tr>'; return; }
+      tbody.innerHTML = data.map(p => `
+        <tr>
+          <td>${p.nome}</td><td>${p.categoria || '-'}</td>
+          <td>R$ ${parseFloat(p.preco).toFixed(2)}</td><td>${p.estoque}</td>
+          <td><button class="btn-editar" onclick="editarProduto(${p.id})">Editar</button>
+          <button class="btn-excluir" onclick="excluirProduto(${p.id})">Excluir</button></td>
+        </tr>
+      `).join('');
+    }
+
+    window.salvarProduto = async function() {
+      const nome = document.getElementById('nome-produto').value;
+      const categoria = document.getElementById('categoria-produto').value;
+      const preco = parseFloat(document.getElementById('preco-produto').value);
+      const img = document.getElementById('img-produto').value;
+      const estoque = parseInt(document.getElementById('estoque-produto').value);
+      if (!nome || !categoria || isNaN(preco) || !img || isNaN(estoque)) return alert('Preencha todos os campos');
+      const { error } = await supabaseApp.from('produtos').insert([{ nome, categoria, preco, img, estoque }]);
+      if (error) alert('Erro: ' + error.message);
+      else { alert('Produto salvo'); limparProduto(); carregarProdutos(); }
+    };
+
+    window.editarProduto = async function(id) {
+      const { data } = await supabaseApp.from('produtos').select('*').eq('id', id).single();
+      if (!data) return;
+      document.getElementById('edit-id').value = data.id;
+      document.getElementById('edit-nome').value = data.nome;
+      document.getElementById('edit-categoria').value = data.categoria;
+      document.getElementById('edit-preco').value = data.preco;
+      document.getElementById('edit-img').value = data.img;
+      document.getElementById('edit-estoque').value = data.estoque;
+      document.getElementById('modalProduto').style.display = 'flex';
+    };
+
+    window.atualizarProduto = async function() {
+      const id = document.getElementById('edit-id').value;
+      const nome = document.getElementById('edit-nome').value;
+      const categoria = document.getElementById('edit-categoria').value;
+      const preco = parseFloat(document.getElementById('edit-preco').value);
+      const img = document.getElementById('edit-img').value;
+      const estoque = parseInt(document.getElementById('edit-estoque').value);
+      if (!id || isNaN(preco) || isNaN(estoque)) return alert('Dados inválidos');
+      const { error } = await supabaseApp.from('produtos').update({ nome, categoria, preco, img, estoque }).eq('id', id);
+      if (error) alert('Erro: ' + error.message);
+      else { alert('Produto atualizado'); fecharModal('modalProduto'); carregarProdutos(); }
+    };
+
+    window.excluirProduto = async function(id) {
+      if (confirm('Excluir produto?')) await supabaseApp.from('produtos').delete().eq('id', id);
+      carregarProdutos();
+    };
+
+    function limparProduto() {
+      document.getElementById('nome-produto').value = '';
+      document.getElementById('categoria-produto').value = '';
+      document.getElementById('preco-produto').value = '';
+      document.getElementById('img-produto').value = '';
+      document.getElementById('estoque-produto').value = '';
+    }
+
+    // Clientes
+    async function carregarClientes() {
+      const { data } = await supabaseApp.from('clientes').select('*').order('id', { ascending: false });
+      const tbody = document.getElementById('lista-clientes');
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="6">Nenhum cliente</td></tr>'; return; }
+      tbody.innerHTML = data.map(c => `
+        <tr><td>${c.id}</td><td>${c.nome}</td><td>${c.email}</td><td>${c.telefone || '-'}</td>
+        <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td>
+        <td><button class="btn-editar" onclick="editarCliente(${c.id})">Editar</button></td></tr>
+      `).join('');
+    }
+
+    window.editarCliente = async function(id) {
+      const { data } = await supabaseApp.from('clientes').select('*').eq('id', id).single();
+      if (!data) return;
+      document.getElementById('cliente-id').value = data.id;
+      document.getElementById('cliente-nome').value = data.nome;
+      document.getElementById('cliente-email').value = data.email;
+      document.getElementById('cliente-telefone').value = data.telefone || '';
+      document.getElementById('cliente-senha').value = '';
+      document.getElementById('modalCliente').style.display = 'flex';
+    };
+
+    window.atualizarCliente = async function() {
+      const id = document.getElementById('cliente-id').value;
+      const nome = document.getElementById('cliente-nome').value;
+      const email = document.getElementById('cliente-email').value;
+      const telefone = document.getElementById('cliente-telefone').value;
+      const novaSenha = document.getElementById('cliente-senha').value;
+      const updateData = { nome, email, telefone };
+      if (novaSenha.trim()) updateData.senha = novaSenha;
+      const { error } = await supabaseApp.from('clientes').update(updateData).eq('id', id);
+      if (error) alert('Erro: ' + error.message);
+      else { alert('Cliente atualizado'); fecharModal('modalCliente'); carregarClientes(); }
+    };
+
+    // Pedidos
+    let pedidosData = [];
+    async function carregarPedidos() {
+      const { data } = await supabaseApp.from('pedidos').select('*').order('id', { ascending: false });
+      const tbody = document.getElementById('lista-pedidos');
+      if (!data || !data.length) { tbody.innerHTML = '<td><td colspan="6">Nenhum pedido</td></tr>'; return; }
+      pedidosData = data;
+      tbody.innerHTML = data.map(p => `
+        <tr><td>${p.id}</td><td>${p.cliente_nome}</td><td>R$ ${parseFloat(p.total).toFixed(2)}</td>
+        <td>${new Date(p.data_pedido).toLocaleDateString()}</td><td>${p.status}</td>
+        <td><button class="btn-editar" onclick="editarPedido(${p.id})">Status</button>
+        <button class="btn-ver" onclick="verItens(${p.id})">Itens</button></td></tr>
+      `).join('');
+    }
+
+    window.editarPedido = function(id) {
+      const pedido = pedidosData.find(p => p.id === id);
+      if (!pedido) return;
+      document.getElementById('pedido-id').value = id;
+      document.getElementById('pedido-status').value = pedido.status;
+      document.getElementById('modalPedido').style.display = 'flex';
+    };
+
+    window.atualizarPedido = async function() {
+      const id = document.getElementById('pedido-id').value;
+      const status = document.getElementById('pedido-status').value;
+      const { error } = await supabaseApp.from('pedidos').update({ status }).eq('id', id);
+      if (error) alert('Erro: ' + error.message);
+      else { alert('Status atualizado'); fecharModal('modalPedido'); carregarPedidos(); }
+    };
+
+    window.verItens = function(id) {
+      const pedido = pedidosData.find(p => p.id === id);
+      if (!pedido) return;
+      let msg = 'Itens:\n';
+      pedido.itens.forEach(i => msg += `${i.nome} x${i.quantidade} = R$ ${(i.preco*i.quantidade).toFixed(2)}\n`);
+      alert(msg);
+    };
+
+    // Utilitários
+    window.fecharModal = function(id) { document.getElementById(id).style.display = 'none'; };
+    window.sair = function() {
+      document.getElementById('painel').style.display = 'none';
+      document.getElementById('login').style.display = 'block';
+    };
+  </script>
+</head>
+<body>
+<div class="container">
+  <div id="login" class="card">
+    <h2>Login Administrativo</h2>
+    <div id="erro-login" class="erro"></div>
+    <input type="email" id="email" placeholder="Email" value="admin@mmcolors.com">
+    <input type="password" id="senha" placeholder="Senha" value="123456">
+    <button onclick="adminLogin()">Entrar</button>
+  </div>
+
+  <div id="painel">
+    <div class="card">
+      <h2>Cadastrar Produto</h2>
+      <input type="text" id="nome-produto" placeholder="Nome">
+      <select id="categoria-produto">
+        <option value="tintas">Tintas</option><option value="massas acrílicas">Massas Acrílicas</option>
+        <option value="gesso em pó">Gesso em Pó</option><option value="grafiato">Grafiato</option>
+        <option value="massa pva textura">Massa PVA Textura</option>
+        <option value="massa polimerica">Massa Polimérica</option><option value="ferramentas">Ferramentas</option>
+      </select>
+      <input type="number" id="preco-produto" step="0.01" placeholder="Preço">
+      <input type="text" id="img-produto" placeholder="URL da imagem">
+      <input type="number" id="estoque-produto" placeholder="Estoque">
+      <button onclick="salvarProduto()">Salvar</button>
+    </div>
+
+    <div class="card">
+      <h2>Produtos</h2>
+      <table id="tabela-produtos"><thead><tr><th>Nome</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="lista-produtos"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Clientes</h2>
+      <table id="tabela-clientes"><thead><tr><th>ID</th><th>Nome</th><th>Email</th><th>Telefone</th><th>Data</th><th>Ações</th></tr></thead><tbody id="lista-clientes"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Pedidos</h2>
+      <table id="tabela-pedidos"><thead><tr><th>ID</th><th>Cliente</th><th>Total</th><th>Data</th><th>Status</th><th>Ações</th></tr></thead><tbody id="lista-pedidos"></tbody></table>
+    </div>
+
+    <button onclick="window.open('index.html','_blank')" style="background:#28a745">🛍️ Loja</button>
+    <button onclick="sair()" style="background:#666">🚪 Sair</button>
+  </div>
+</div>
+
+<!-- Modal Produto -->
+<div id="modalProduto" class="modal">
+  <div class="modal-content"><span onclick="fecharModal('modalProduto')" style="float:right;cursor:pointer">&times;</span>
+    <h3>Editar Produto</h3>
+    <input type="hidden" id="edit-id"><input type="text" id="edit-nome" placeholder="Nome">
+    <select id="edit-categoria"><option value="tintas">Tintas</option><option value="massas acrílicas">Massas Acrílicas</option><option value="gesso em pó">Gesso em Pó</option><option value="grafiato">Grafiato</option><option value="massa pva textura">Massa PVA Textura</option><option value="massa polimerica">Massa Polimérica</option><option value="ferramentas">Ferramentas</option></select>
+    <input type="number" id="edit-preco" step="0.01" placeholder="Preço">
+    <input type="text" id="edit-img" placeholder="URL da imagem">
+    <input type="number" id="edit-estoque" placeholder="Estoque">
+    <button onclick="atualizarProduto()">Atualizar</button>
+  </div>
+</div>
+
+<!-- Modal Cliente -->
+<div id="modalCliente" class="modal">
+  <div class="modal-content"><span onclick="fecharModal('modalCliente')" style="float:right;cursor:pointer">&times;</span>
+    <h3>Editar Cliente</h3>
+    <input type="hidden" id="cliente-id"><input type="text" id="cliente-nome" placeholder="Nome">
+    <input type="email" id="cliente-email" placeholder="Email"><input type="text" id="cliente-telefone" placeholder="Telefone">
+    <input type="password" id="cliente-senha" placeholder="Nova senha (opcional)">
+    <button onclick="atualizarCliente()">Atualizar</button>
+  </div>
+</div>
+
+<!-- Modal Pedido -->
+<div id="modalPedido" class="modal">
+  <div class="modal-content"><span onclick="fecharModal('modalPedido')" style="float:right;cursor:pointer">&times;</span>
+    <h3>Alterar Status</h3>
+    <input type="hidden" id="pedido-id">
+    <select id="pedido-status"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="enviado">Enviado</option><option value="cancelado">Cancelado</option></select>
+    <button onclick="atualizarPedido()">Salvar</button>
+  </div>
+</div>
+</body>
+</html>
